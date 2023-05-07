@@ -22,7 +22,7 @@ class People(object):
         self.count = count  # 总人数
         self.first_infected_count = first_infected_count  # 0代病人数量
         self.T_infect = T_infect  # 感染周期，过了这段时间会死亡或者转为康复
-        self._people = np.random.normal(0, 50, (self.count, 2))  # 这里是各个人的坐标位置
+        self._people = np.random.normal(0, 50, (self.count, 2)) # 这里是各个人的坐标位置
         self.segregate = 0
         self.reset()
         self.quarantine_array = []
@@ -36,9 +36,24 @@ class People(object):
             self._quarantinepeople = np.zeros(())  # 密接者数组
         self.migrant = migrant  # 流动指数
         self.quarantine = quarantine  # 隔离速度
-        if strategy > 0:
-            self.vaccine_max = min(strategy, 2)  # 接种率上限
-
+        # 接种疫苗后感染风险降低70 % 左右，即感染概率为20 % 左右
+        # 严格管控措施后感染风险降低60 % 左右，即感染概率为30 % 左右
+        # 接种疫苗并且适度管控措施后感染风险降低75 % 左右，感染概率为15 % 左右
+        # 接种疫苗并且严格管控措施后感染风险降低80 % 左右，感染概率为10 % 左右
+        if strategy == 1:
+            self.vaccine_max = np.random.normal(0.7, 0.005)  # 接种率下降数
+        if strategy == 2:
+            for i in range(self.count):
+                if (self._people[i][0] < -245) and (self._people[i][1] > 0):
+                    self.vaccine_max = np.random.normal(0.7, 0.005) # 家庭不受公共管控影响
+                else:
+                    self.vaccine_max = np.random.normal(0.75, 0.005)
+        if strategy == 3:
+            for i in range(self.count):
+                if (self._people[i][0] < -245) and (self._people[i][1] > 0):
+                    self.vaccine_max = np.random.normal(0.7, 0.005)
+                else:
+                    self.vaccine_max = np.random.normal(0.8, 0.005)
     # 在类中定义函数。同__init__()方法一样，实例方法的第一参数必须是self，并且必须包含一个self参数。
     def reset(self):
         self.round = 0
@@ -152,11 +167,17 @@ class People(object):
 
     def infect_possible(self, x=0., safe_distance=10.0):
         """潜伏期和感染者都会按概率感染接近的健康人
-        x 的取值参考正态分布概率表，x=0 时感染概率是 50%
+        x的初始取值根据研究（无防护感染几率高达90%）设置
+        接种疫苗后感染风险降低70%左右，即感染概率为20%左右
+        严格管控措施后感染风险降低60%左右，即感染概率为30%左右
+        接种疫苗并且适度管控措施后，感染概率为10%左右
+        接种疫苗并且严格管控措施后，感染概率为15%左右
+        各项措施实行需要时间，设置感染风险随时间（轮次）逐步降低2%
         """
         # 这里x会收到疫苗接种率vaccine影响
         if (self.strategy > 0):
-            x = x + self.vaccine_max * self.round / self.totalround
+            x = np.random.normal(0.9, 0.005)
+            x = x - min((0.2 * self.round), self.vaccine_max)
         temp = np.append(self.infected, self.latent)
         for j in range(len(temp)):
             if (self.strategy == 3 and np.isin(j, self._quarantinepeople)):
@@ -170,7 +191,7 @@ class People(object):
                     break  # 后面的人超出影响范围，不用管了
                 if self._status[i] > 0:
                     continue
-                if np.random.normal() > x:
+                if np.random.normal() < x:
                     continue
                 self._status[i] = 1
                 # 记录状态改变的时间
@@ -228,23 +249,40 @@ class People(object):
         t = "Round: %s, Healthy: %s, Latent: %s,Infected: %s, recovered: %s,dead: %s" % \
             (self.round, len(self.healthy), len(self.latent), len(self.infected), len(self.recovered), len(self.dead))
         a1.text(-180, 420, t, ha='left', wrap=True)
+        # 散点图区域划分
         left, bottom, width, height = (250, -410, 100, 820)
         rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="red")
         a1.add_patch(rect)
-        a1.text(265, 0, 'hospital', fontsize=10, color="red", weight="bold")
+        a1.text(275, 0, 'hospital', fontsize=10, color="red", weight="bold")
         left, bottom, width, height = (350, -410, 90, 820)
         rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="purple")
         a1.add_patch(rect)
-        a1.text(355, 10, 'isolation', fontsize=10, color="purple", weight="bold")
-        a1.text(370, -10, 'zone', fontsize=10, color="purple", weight="bold")
-        left, bottom, width, height = (-410, 0, 660, 440)
+        a1.text(370, 10, 'isolation', fontsize=10, color="purple", weight="bold")
+        a1.text(380, -10, 'zone', fontsize=10, color="purple", weight="bold")
+        left, bottom, width, height = (-410, 0, 165, 440)
+        rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="orange")
+        a1.add_patch(rect)
+        a1.text(-350, 200, 'home', fontsize=16, color="orange", weight="bold")
+        left, bottom, width, height = (-245, 0, 495, 440)
         rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="green")
         a1.add_patch(rect)
-        a1.text(-150, 200, 'public area', fontsize=16, color="green", weight="bold")
+        a1.text(-60, 350, 'public area', fontsize=20, color="green", weight="bold")
+        left, bottom, width, height = (-245, 0, 163, 440)
+        rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="green")
+        a1.add_patch(rect)
+        a1.text(-220, 200, 'supermarket', fontsize=16, color="green", weight="bold")
+        left, bottom, width, height = (-80, 0, 163, 440)
+        rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="green")
+        a1.add_patch(rect)
+        a1.text(-40, 200, 'cinema', fontsize=16, color="green", weight="bold")
+        left, bottom, width, height = (85, 0, 165, 440)
+        rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="green")
+        a1.add_patch(rect)
+        a1.text(130, 200, 'school', fontsize=16, color="green", weight="bold")
         left, bottom, width, height = (-410, -410, 660, 410)
         rect = mpatches.Rectangle((left, bottom), width, height, alpha=0.1, facecolor="blue")
         a1.add_patch(rect)
-        a1.text(-150, -200, 'open area', fontsize=16, color="blue", weight="bold")
+        a1.text(-140, -200, 'open area', fontsize=20, color="blue", weight="bold")
         # 隔离人数折线图部分：感染人数、隔离人数
         a2.cla()
         a2.set_ylim([0, 1200])
